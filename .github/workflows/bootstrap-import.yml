@@ -4,11 +4,10 @@ on:
   push:
     branches: [ main ]
     paths:
-      - '.bootstrap/production-source.tar.xz'
+      - '.bootstrap/READY'
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   import:
@@ -31,12 +30,14 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/elysium-production
           tar -xJf .bootstrap/production-source.tar.xz -C /tmp/elysium-production
-          rsync -a --delete --exclude='.git/' /tmp/elysium-production/ ./
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/workflows/' \
+            --exclude='.bootstrap/' \
+            /tmp/elysium-production/ ./
           if [ -f .bootstrap_expand/expand.py ]; then
             python3 .bootstrap_expand/expand.py
           fi
-          rm -rf .bootstrap
-          rm -f .github/workflows/bootstrap-import.yml
 
       - name: Verify recovered C++ inventory
         shell: bash
@@ -61,11 +62,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
+          git reset -- .github/workflows .bootstrap
           git commit -m 'Import Elysium production-ready 1612-file build'
           git push origin HEAD:main
-
-      - name: Dispatch Windows production build
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run windows-build.yml --repo "${{ github.repository }}" --ref main
