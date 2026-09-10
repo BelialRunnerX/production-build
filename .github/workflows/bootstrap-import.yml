@@ -9,8 +9,6 @@ on:
 permissions:
   contents: write
 
-actions:
-
 jobs:
   import:
     runs-on: ubuntu-latest
@@ -24,7 +22,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .bootstrap/payload.part*.b64 | base64 --decode > /tmp/elysium-production.tar.xz
+          if compgen -G '.bootstrap/payload.part*.b64' > /dev/null; then
+            cat .bootstrap/payload.part*.b64 | base64 --decode > /tmp/elysium-production.tar.xz
+          elif [ -f .bootstrap/production-source.tar.xz ]; then
+            cp .bootstrap/production-source.tar.xz /tmp/elysium-production.tar.xz
+          else
+            echo 'No bootstrap production payload found.' >&2
+            exit 1
+          fi
           mkdir -p /tmp/elysium-production
           tar -xJf /tmp/elysium-production.tar.xz -C /tmp/elysium-production
           rsync -a --delete --exclude='.git/' /tmp/elysium-production/ ./
@@ -36,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/generate_production_sources.py
-          test -z "$(git diff -- cmake/ProductionSources.cmake)"
+          git diff --exit-code -- cmake/ProductionSources.cmake
           runtime=$(find src -name '*.cpp' -type f | wc -l)
           tests=$(find tests -name '*.cpp' -type f | wc -l)
           tools=$(find tools -name '*.cpp' -type f | wc -l)
@@ -51,8 +56,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m "Import Elysium production-ready 1612-file build"
+          git commit -m 'Import Elysium production-ready 1612-file build'
           git push origin HEAD:main
