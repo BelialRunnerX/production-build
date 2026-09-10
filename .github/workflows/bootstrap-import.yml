@@ -4,10 +4,11 @@ on:
   push:
     branches: [ main ]
     paths:
-      - '.bootstrap/READY'
+      - '.bootstrap/production-source.tar.xz'
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   import:
@@ -18,21 +19,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify bootstrap payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '39513de33512070237eeee88d47917b2b95747f9fb01d0d1e1432bf8e14fcac7  .bootstrap/production-source.tar.xz' | sha256sum --check --strict
+
       - name: Reconstruct production tree
         shell: bash
         run: |
           set -euo pipefail
-          if compgen -G '.bootstrap/payload.part*.b64' > /dev/null; then
-            cat .bootstrap/payload.part*.b64 | base64 --decode > /tmp/elysium-production.tar.xz
-          elif [ -f .bootstrap/production-source.tar.xz ]; then
-            cp .bootstrap/production-source.tar.xz /tmp/elysium-production.tar.xz
-          else
-            echo 'No bootstrap production payload found.' >&2
-            exit 1
-          fi
           mkdir -p /tmp/elysium-production
-          tar -xJf /tmp/elysium-production.tar.xz -C /tmp/elysium-production
+          tar -xJf .bootstrap/production-source.tar.xz -C /tmp/elysium-production
           rsync -a --delete --exclude='.git/' /tmp/elysium-production/ ./
+          if [ -f .bootstrap_expand/expand.py ]; then
+            python3 .bootstrap_expand/expand.py
+          fi
           rm -rf .bootstrap
           rm -f .github/workflows/bootstrap-import.yml
 
@@ -61,3 +63,9 @@ jobs:
           git add -A
           git commit -m 'Import Elysium production-ready 1612-file build'
           git push origin HEAD:main
+
+      - name: Dispatch Windows production build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run windows-build.yml --repo "${{ github.repository }}" --ref main
